@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "cpad.h"
 #include "vfb2_user.h"
@@ -87,13 +88,34 @@ void switch_buffers(void)
 
 void inline cpad_write(void *data, size_t size)
 {
-	if (write(cpad, data, size) <= 0) {
-		perror("cpad write error");
-		leave(-1);
-	}
+	unsigned char *datap = data;
+	unsigned char cmd = datap[0];
+	unsigned char backup;
+	int res;
+	int remain = size-1;
+
+	if (!size)
+		return;
+
+	do {
+		backup = datap[0];
+		datap[0] = cmd;
+
+		res = write(cpad, datap, remain+1);
+		if (res <= 0) {
+			perror("cpad write error");
+			//leave(-1);
+		}
+
+		datap[0] = backup;
+
+		remain -= res-1;
+		datap += res-1;
+	} while (remain);
+
 	if (read(cpad, read_buffer, 32) < 0) {
 		perror("cpad read error");
-		leave(-1);
+		//leave(-1);
 	}
 }
 
@@ -259,7 +281,7 @@ Description:\n\
 	--idle-rate rate - framerate when idle (default: 4)\n\
 \n"
 
-inline void command_line(int argc, char **argv)
+void command_line(int argc, char **argv)
 {
 	int i;
 
